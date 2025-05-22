@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Connect4 Game</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h2 id="status">Waiting for opponent...</h2>
+  <div id="gameBoard" class="board" style="display:none;"></div>
+  <br>
+  <button id="rematchBtn" style="display:none;" onclick="requestRematch()">Play Again</button>
+  <button id="abortBtn" onclick="abortGame()">Abort Match</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    const nickname = urlParams.get('nickname');
+
+    const statusEl = document.getElementById('status');
+    const boardEl = document.getElementById('gameBoard');
+    const rematchBtn = document.getElementById('rematchBtn');
+
+    let room = null;
+    let playerNumber = null;
+    let myTurn = false;
+    const ROWS = 6, COLS = 7;
+    let board = [];
+
+    joinGame();
+
+    function joinGame() {
+      socket.emit('joinGame', nickname);
+      statusEl.textContent = "Waiting for opponent...";
+      boardEl.style.display = 'none';
+      rematchBtn.style.display = 'none';
+    }
+
+    socket.on('startGame', (data) => {
+      room = data.room;
+      const players = data.players;
+      const myPlayer = players.find(p => p.nickname === nickname);
+      playerNumber = myPlayer.player;
+      myTurn = playerNumber === 1;
+
+      statusEl.textContent = myTurn ? "Your turn" : "Opponent's turn";
+
+      board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+      renderBoard();
+    });
+
+    function renderBoard() {
+      boardEl.innerHTML = '';
+      boardEl.style.display = 'grid';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          if (board[r][c] === 1) cell.classList.add('red');
+          if (board[r][c] === 2) cell.classList.add('yellow');
+          cell.onclick = () => {
+            if (myTurn) makeMove(r, c);
+          };
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function makeMove(row, col) {
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (board[r][col] === 0) {
+          board[r][col] = playerNumber;
+          renderBoard();
+          myTurn = false;
+          statusEl.textContent = "Opponent's turn";
+          socket.emit('makeMove', { row: r, col, room });
+          checkWinner(r, col);
+          return;
+        }
+      }
+    }
+
+    socket.on('moveMade', ({ row, col }) => {
+      board[row][col] = playerNumber === 1 ? 2 : 1;
+      renderBoard();
+      myTurn = true;
+      statusEl.textContent = "Your turn";
+    });
+
+    function checkWinner(row, col) {
+      const directions = [
+        [[0,1],[0,-1]], [[1,0],[-1,0]],
+        [[1,1],[-1,-1]], [[1,-1],[-1,1]]
+      ];
+
+      for (const [dir1, dir2] of directions) {
+        let count = 1;
+        count += countDirection(row, col, dir1[0], dir1[1]);
+        count += countDirection(row, col, dir2[0], dir2[1]);
+        if (count >= 4) {
+          socket.emit('gameOver', { room, winner: nickname });
+          return;
+        }
+      }
+    }
+
+    function countDirection(r, c, dr, dc) {
+      let count = 0;
+      const curr = playerNumber;
+      for (let i = 1; i < 4; i++) {
+        let nr = r + dr * i;
+        let nc = c + dc * i;
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) break;
+        if (board[nr][nc] !== curr) break;
+        count++;
+      }
+      return count;
+    }
+
+    socket.on('gameEnded', ({ winner }) => {
+      statusEl.textContent = winner === nickname ? "You won!" : `${winner} won!`;
+      myTurn = false;
+      rematchBtn.style.display = 'inline-block';
+    });
+
+    function requestRematch() {
+      joinGame();
+    }
+
+    function abortGame() {
+      if (room) socket.emit('abortGame', { room });
+      window.location.href = '/';
+    }
+
+    socket.on('opponentAborted', () => {
+      alert("Opponent aborted the match.");
+      window.location.href = '/';
+    });
+
+    socket.on('opponentDisconnected', () => {
+      alert("Opponent disconnected.");
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

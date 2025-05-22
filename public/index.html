@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Connect4 Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h2>Enter Your Nickname</h2>
+  <input id="nicknameInput" placeholder="Nickname" />
+  <br><br>
+  <button onclick="startGame()">Start Game</button>
+  <button onclick="viewProfile()">View Profile</button>
+
+  <script>
+    function startGame() {
+      const nickname = document.getElementById('nicknameInput').value.trim();
+      if (nickname) {
+        window.location.href = `/game.html?nickname=${nickname}`;
+      }
+    }
+
+    function viewProfile() {
+      const nickname = document.getElementById('nicknameInput').value.trim();
+      if (nickname) {
+        window.location.href = `/profile.html?username=${nickname}`;
+      }
+    }
+  </script>
+</body>
+</html>
